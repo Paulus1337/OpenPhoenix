@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>OpenPhoenix</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <img id="logo" src="/logo.svg" alt="Pip the Phoenix" width="36" height="36">
+  <div class="title">
+    <h1>OpenPhoenix</h1>
+    <div class="tag">rise &amp; shine</div>
+  </div>
+  <button id="token-btn" type="button" title="Set API token">token</button>
+</header>
+<main id="log" aria-live="polite"></main>
+<form id="composer">
+  <textarea id="prompt" rows="3" placeholder="Ask Pip… (Ctrl+Enter to send)" autofocus></textarea>
+  <button id="send" type="submit">Send</button>
+</form>
+<script src="/app.js"></script>
+</body>
+</html>

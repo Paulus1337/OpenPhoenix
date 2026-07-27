@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Pip the Phoenix - OpenPhoenix mascot</title>
+  <defs>
+    <radialGradient id="body" cx="50%" cy="40%" r="75%">
+      <stop offset="0%" stop-color="#ffb347"/>
+      <stop offset="55%" stop-color="#ff8c2e"/>
+      <stop offset="100%" stop-color="#f2600f"/>
+    </radialGradient>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ff7a1a"/>
+      <stop offset="60%" stop-color="#ffb02e"/>
+      <stop offset="100%" stop-color="#ffd968"/>
+    </linearGradient>
+    <linearGradient id="belly" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe6b3"/>
+      <stop offset="100%" stop-color="#ffc97a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tail flames -->
+  <path d="M52 196 C40 178 46 160 62 152 C58 170 68 176 76 186 C70 196 60 200 52 196 Z"
+        fill="url(#flame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M204 196 C216 178 210 160 194 152 C198 170 188 176 180 186 C186 196 196 200 204 196 Z"
+        fill="url(#flame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- crest flames -->
+  <path d="M128 18 C118 36 112 44 118 58 C122 66 134 66 138 58 C144 44 138 36 128 18 Z"
+        fill="url(#flame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M100 34 C96 46 92 52 96 62 C100 69 110 68 112 60 C115 50 108 44 100 34 Z"
+        fill="url(#flame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M156 34 C160 46 164 52 160 62 C156 69 146 68 144 60 C141 50 148 44 156 34 Z"
+        fill="url(#flame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- body -->
+  <path d="M128 56 C176 56 204 92 204 140 C204 190 172 220 128 220 C84 220 52 190 52 140 C52 92 80 56 128 56 Z"
+        fill="url(#body)" stroke="#c2410c" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- wings -->
+  <path d="M56 128 C40 136 34 154 40 170 C52 168 64 158 70 144 Z"
+        fill="#ff9633" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M200 128 C216 136 222 154 216 170 C204 168 192 158 186 144 Z"
+        fill="#ff9633" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- belly -->
+  <ellipse cx="128" cy="172" rx="44" ry="36" fill="url(#belly)"/>
+
+  <!-- eyes -->
+  <circle cx="103" cy="122" r="20" fill="#ffffff" stroke="#c2410c" stroke-width="4"/>
+  <circle cx="153" cy="122" r="20" fill="#ffffff" stroke="#c2410c" stroke-width="4"/>
+  <circle cx="107" cy="126" r="9" fill="#3b2314"/>
+  <circle cx="149" cy="126" r="9" fill="#3b2314"/>
+  <circle cx="110" cy="122" r="3.2" fill="#ffffff"/>
+  <circle cx="152" cy="122" r="3.2" fill="#ffffff"/>
+
+  <!-- cheeks -->
+  <ellipse cx="84" cy="148" rx="9" ry="6" fill="#ff7a52" opacity="0.75"/>
+  <ellipse cx="172" cy="148" rx="9" ry="6" fill="#ff7a52" opacity="0.75"/>
+
+  <!-- beak -->
+  <path d="M118 142 L138 142 C138 152 133 158 128 158 C123 158 118 152 118 142 Z"
+        fill="#ffcf3f" stroke="#c2410c" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- smile -->
+  <path d="M112 166 Q128 176 144 166" fill="none" stroke="#a83a10" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- feet -->
+  <path d="M108 218 L108 230 M100 226 L108 230 L116 226" fill="none" stroke="#c2410c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M148 218 L148 230 M140 226 L148 230 L156 226" fill="none" stroke="#c2410c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

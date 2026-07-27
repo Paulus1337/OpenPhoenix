@@ -1,0 +1,129 @@
+name: release
+
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, x86_64-pc-windows-gnu
+      - name: Cross toolchains
+        run: sudo apt-get update && sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu gcc-mingw-w64-x86-64
+      - name: Test
+        run: cargo test --locked
+      - name: Build x86_64 musl
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Build aarch64 musl
+        run: cargo build --release --locked --target aarch64-unknown-linux-musl
+      - name: Build windows x86_64
+        run: cargo build --release --locked --target x86_64-pc-windows-gnu
+      - name: Strip and rename
+        run: |
+          strip target/x86_64-unknown-linux-musl/release/phoenix
+          aarch64-linux-gnu-strip target/aarch64-unknown-linux-musl/release/phoenix
+          x86_64-w64-mingw32-strip target/x86_64-pc-windows-gnu/release/phoenix.exe
+          cp target/x86_64-unknown-linux-musl/release/phoenix phoenix-linux-x86_64
+          cp target/aarch64-unknown-linux-musl/release/phoenix phoenix-linux-arm64
+          cp target/x86_64-pc-windows-gnu/release/phoenix.exe phoenix-windows-x86_64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-and-windows
+          path: |
+            phoenix-linux-x86_64
+            phoenix-linux-arm64
+            phoenix-windows-x86_64.exe
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: Test on macOS
+        run: cargo test --locked
+      - name: Build arm64 (Apple silicon)
+        run: cargo build --release --locked --target aarch64-apple-darwin
+      - name: Build x86_64 (Intel)
+        run: cargo build --release --locked --target x86_64-apple-darwin
+      - name: Strip and rename
+        run: |
+          strip target/aarch64-apple-darwin/release/phoenix
+          strip target/x86_64-apple-darwin/release/phoenix
+          cp target/aarch64-apple-darwin/release/phoenix phoenix-macos-arm64
+          cp target/x86_64-apple-darwin/release/phoenix phoenix-macos-x86_64
+      - name: Smoke the native binary
+        run: |
+          ./phoenix-macos-$(uname -m | sed 's/x86_64/x86_64/;s/arm64/arm64/') --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            phoenix-macos-arm64
+            phoenix-macos-x86_64
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: linux
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-and-windows
+      - name: Stage dist layout
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          install -m 0755 phoenix-linux-x86_64 dist/amd64/phoenix
+          install -m 0755 phoenix-linux-arm64 dist/arm64/phoenix
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase image name (ghcr requires it)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openphoenix" >> "$GITHUB_ENV"
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:latest
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [linux, macos]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum phoenix-* > SHA256SUMS
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            phoenix-linux-x86_64
+            phoenix-linux-arm64
+            phoenix-macos-arm64
+            phoenix-macos-x86_64
+            phoenix-windows-x86_64.exe
+            SHA256SUMS
+          generate_release_notes: false

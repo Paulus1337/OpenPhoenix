@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & ideas
+    url: https://github.com/Paulus1337/OpenPhoenix/discussions
+    about: Ask in Discussions; issues are for bugs and concrete features.
+  - name: Security reports
+    url: https://github.com/Paulus1337/OpenPhoenix/security/advisories/new
+    about: Report vulnerabilities privately.

@@ -1,0 +1,33 @@
+[package]
+name = "openphoenix"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Personal AI agent runtime. Single static binary, small dependency tree."
+
+[[bin]]
+name = "phoenix"
+path = "src/main.rs"
+
+# Dependency policy: keep this tree minimal. Every new crate needs a strong
+# justification in a comment here and in CONTRIBUTING.md.
+[dependencies]
+# Blocking HTTP client with rustls. No tokio, no openssl.
+ureq = { version = "2", default-features = false, features = ["tls"] }
+# Direct rustls handle for the hand-rolled WebSocket client (same tree ureq uses).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "0.26"
+# Data model for provider payloads and tool schemas.
+serde = "1"
+serde_json = "1"
+# Config file format.
+toml = "0.8"
+# Command gate, secret redaction, HTML stripping.
+regex = "1"
+# libc: only for localtime_r, so cron matching and memory timestamps use
+# local time for cron and memory timestamps without pulling in chrono.
+libc = "0.2"
+
+[profile.release]
+strip = true
+lto = true
