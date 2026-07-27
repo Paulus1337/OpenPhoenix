@@ -16,7 +16,7 @@ path = "src/main.rs"
 ureq = { version = "2", default-features = false, features = ["tls"] }
 # Direct rustls handle for the hand-rolled WebSocket client (same tree ureq uses).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
-webpki-roots = "0.26"
+webpki-roots = "1.0"
 # Data model for provider payloads and tool schemas.
 serde = "1"
 serde_json = "1"
