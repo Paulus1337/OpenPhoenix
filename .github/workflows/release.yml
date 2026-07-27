@@ -34,7 +34,7 @@ jobs:
           cp target/x86_64-unknown-linux-musl/release/phoenix phoenix-linux-x86_64
           cp target/aarch64-unknown-linux-musl/release/phoenix phoenix-linux-arm64
           cp target/x86_64-pc-windows-gnu/release/phoenix.exe phoenix-windows-x86_64.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-and-windows
           path: |
@@ -64,7 +64,7 @@ jobs:
       - name: Smoke the native binary
         run: |
           ./phoenix-macos-$(uname -m | sed 's/x86_64/x86_64/;s/arm64/arm64/') --version
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: |
