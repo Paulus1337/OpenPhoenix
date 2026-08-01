@@ -1,0 +1,250 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, x86_64-pc-windows-gnu
+      - name: Cross toolchains
+        run: sudo apt-get update && sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu libc6-dev-arm64-cross gcc-mingw-w64-x86-64
+      - name: Pin the release public key into the build
+        env:
+          SIGNING_KEY: ${{ secrets.PHOENIX_SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            printf '%s\n' "$SIGNING_KEY" > /tmp/sk.pem
+            PUB=$(openssl pkey -in /tmp/sk.pem -pubout -outform DER | tail -c 32 | xxd -p -c 64)
+            rm -f /tmp/sk.pem
+            echo "PHOENIX_SIGNING_PUBKEY=$PUB" >> "$GITHUB_ENV"
+            echo "release pubkey pinned: $PUB"
+          else
+            echo "PHOENIX_SIGNING_KEY secret not set; binaries keep the default pinned key"
+          fi
+      - name: Test
+        run: cargo test --locked
+      - name: Build x86_64 musl
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Build aarch64 musl
+        run: cargo build --release --locked --target aarch64-unknown-linux-musl
+      - name: Build windows x86_64
+        run: cargo build --release --locked --target x86_64-pc-windows-gnu
+      - name: Strip and rename
+        run: |
+          strip target/x86_64-unknown-linux-musl/release/phoenix
+          aarch64-linux-gnu-strip target/aarch64-unknown-linux-musl/release/phoenix
+          x86_64-w64-mingw32-strip target/x86_64-pc-windows-gnu/release/phoenix.exe
+          cp target/x86_64-unknown-linux-musl/release/phoenix phoenix-linux-x86_64
+          cp target/aarch64-unknown-linux-musl/release/phoenix phoenix-linux-arm64
+          cp target/x86_64-pc-windows-gnu/release/phoenix.exe phoenix-windows-x86_64.exe
+      - name: Debian packages
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          for arch in amd64 arm64; do
+            case $arch in
+              amd64) BIN=phoenix-linux-x86_64 ;;
+              arm64) BIN=phoenix-linux-arm64 ;;
+            esac
+            ROOT=deb/$arch
+            mkdir -p $ROOT/DEBIAN $ROOT/usr/bin $ROOT/usr/share/doc/openphoenix
+            install -m 0755 $BIN $ROOT/usr/bin/phoenix
+            cp LICENSE $ROOT/usr/share/doc/openphoenix/copyright
+            SIZE=$(du -sk $ROOT/usr | cut -f1)
+            printf 'Package: openphoenix\nVersion: %s\nArchitecture: %s\nMaintainer: Paulus1337 <Paulus1337@users.noreply.github.com>\nInstalled-Size: %s\nSection: utils\nPriority: optional\nHomepage: https://github.com/Paulus1337/OpenPhoenix\nDescription: Personal AI agent in one static Rust binary\n Ghost mode by default, fail-closed security, one TOML config.\n Runs Telegram, WhatsApp, Discord, Slack, Signal, a web UI and cron\n from a single self-contained executable with no runtime dependencies.\n' "$VERSION" "$arch" "$SIZE" > $ROOT/DEBIAN/control
+            dpkg-deb --build --root-owner-group $ROOT openphoenix_${VERSION}_${arch}.deb
+          done
+          dpkg-deb --info openphoenix_${VERSION}_amd64.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-and-windows
+          path: |
+            phoenix-linux-x86_64
+            phoenix-linux-arm64
+            phoenix-windows-x86_64.exe
+            openphoenix_*.deb
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: Pin the release public key into the build
+        env:
+          SIGNING_KEY: ${{ secrets.PHOENIX_SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            printf '%s\n' "$SIGNING_KEY" > /tmp/sk.pem
+            PUB=$(openssl pkey -in /tmp/sk.pem -pubout -outform DER | tail -c 32 | xxd -p -c 64)
+            rm -f /tmp/sk.pem
+            echo "PHOENIX_SIGNING_PUBKEY=$PUB" >> "$GITHUB_ENV"
+            echo "release pubkey pinned: $PUB"
+          else
+            echo "PHOENIX_SIGNING_KEY secret not set; binaries keep the default pinned key"
+          fi
+      - name: Test on macOS
+        run: cargo test --locked --no-fail-fast -- --test-threads=1 2>&1 | tee macos-test-output.txt
+      - name: Upload macOS test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-output
+          path: macos-test-output.txt
+      - name: Build arm64 (Apple silicon)
+        run: cargo build --release --locked --target aarch64-apple-darwin
+      - name: Build x86_64 (Intel)
+        run: cargo build --release --locked --target x86_64-apple-darwin
+      - name: Strip and rename
+        run: |
+          strip target/aarch64-apple-darwin/release/phoenix
+          strip target/x86_64-apple-darwin/release/phoenix
+          cp target/aarch64-apple-darwin/release/phoenix phoenix-macos-arm64
+          cp target/x86_64-apple-darwin/release/phoenix phoenix-macos-x86_64
+      - name: Smoke the native binary
+        run: |
+          ./phoenix-macos-$(uname -m | sed 's/x86_64/x86_64/;s/arm64/arm64/') --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            phoenix-macos-arm64
+            phoenix-macos-x86_64
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [linux, macos]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-and-windows
+      - name: Stage dist layout
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          install -m 0755 phoenix-linux-x86_64 dist/amd64/phoenix
+          install -m 0755 phoenix-linux-arm64 dist/arm64/phoenix
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase image name (ghcr requires it)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openphoenix" >> "$GITHUB_ENV"
+      - name: Write the runtime Dockerfile
+        run: |
+          mkdir -p docker
+          printf '%s\n' \
+            'FROM scratch' \
+            'ARG TARGETARCH=amd64' \
+            'COPY dist/${TARGETARCH}/phoenix /phoenix' \
+            'ENV HOME=/data' \
+            'WORKDIR /data' \
+            'VOLUME ["/data"]' \
+            'ENTRYPOINT ["/phoenix"]' \
+            'CMD ["serve"]' > docker/Dockerfile
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # build-push-action defaults provenance/sbom ON under Actions. Each adds an
+          # extra unknown/unknown manifest to the index, which GHCR lists as its own
+          # untagged package version. Off = one tagged index plus its two required
+          # per-arch children, nothing else.
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:latest
+
+      # Re-shipping the same tag (amend + force push + retag v0.0.1) repoints the tag at
+      # a new digest and strands the previous one as an untagged version forever. Sweep
+      # those, but never touch anything newer than an hour: the per-arch children of the
+      # image just pushed are legitimately untagged and deleting them breaks the pull.
+      - name: Prune stranded untagged versions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          for scope in "users/${owner}" "orgs/${owner}"; do
+            if gh api "/${scope}/packages/container/openphoenix/versions" \
+                 --paginate > /tmp/versions.json 2>/dev/null; then
+              echo "listed via ${scope}"
+              cutoff=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
+              jq -r --arg cutoff "$cutoff" '
+                .[]
+                | select((.metadata.container.tags | length) == 0)
+                | select(.created_at < $cutoff)
+                | .id' /tmp/versions.json > /tmp/stale.txt
+              count=$(wc -l < /tmp/stale.txt)
+              echo "stranded untagged versions older than 1h: ${count}"
+              while read -r id; do
+                [ -n "$id" ] || continue
+                echo "deleting version ${id}"
+                gh api -X DELETE "/${scope}/packages/container/openphoenix/versions/${id}" \
+                  || echo "could not delete ${id} (needs a PAT with delete:packages)"
+              done < /tmp/stale.txt
+              exit 0
+            fi
+          done
+          echo "could not list package versions; skipping prune"
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [linux, macos]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum phoenix-* openphoenix_*.deb > SHA256SUMS
+      - name: Sign every binary with the release key
+        env:
+          SIGNING_KEY: ${{ secrets.PHOENIX_SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "PHOENIX_SIGNING_KEY secret is not set; refusing to ship an unsigned release."
+            echo "Generate one:  openssl genpkey -algorithm ED25519 -out signing.key"
+            echo "Store the PEM as the PHOENIX_SIGNING_KEY repo secret, keep the file offline."
+            exit 1
+          fi
+          printf '%s\n' "$SIGNING_KEY" > signing.key
+          chmod 600 signing.key
+          for f in phoenix-linux-x86_64 phoenix-linux-arm64 phoenix-macos-arm64 phoenix-macos-x86_64 phoenix-windows-x86_64.exe; do
+            openssl pkeyutl -sign -inkey signing.key -rawin -in "$f" -out "$f.sig"
+            echo "signed $f"
+          done
+          rm -f signing.key
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            phoenix-linux-x86_64
+            phoenix-linux-arm64
+            phoenix-macos-arm64
+            phoenix-macos-x86_64
+            phoenix-windows-x86_64.exe
+            phoenix-*.sig
+            openphoenix_*.deb
+            SHA256SUMS
+          generate_release_notes: false
