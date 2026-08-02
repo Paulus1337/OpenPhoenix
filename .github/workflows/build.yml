@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Format check
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+      - name: Docs build clean
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+      - name: No em dashes in the tree
+        run: |
+          bad=0
+          if git grep -n -P '\x{2014}' -- . ':(exclude).git'; then bad=1; fi
+          if git grep -n -P '\\u\{2014\}|\\u2014|\\U00002014|&mdash;|&#8212;|&#x2014;' -- . ':(exclude).git' ':(exclude).github/workflows/build.yml' ':(exclude)src/text.rs'; then bad=1; fi
+          if [ "$bad" != "0" ]; then
+            echo "em dash found; use a comma, colon, semicolon or full stop"
+            exit 1
+          fi
+      - name: No comments in source (belt; unit test is braces)
+        run: |
+          if grep -rn '^\s*//' src --include='*.rs' | grep -v '://'; then
+            echo "comments are forbidden in src; docs live in the wiki"
+            exit 1
+          fi
+      - name: Unsafe stays confined to the daemon.rs signal shim
+        run: |
+          hits=$(grep -rlnP '\bunsafe\b\s*(\{|fn|impl|trait|extern)' src --include='*.rs' | grep -v 'src/daemon.rs' || true)
+          if [ -n "$hits" ]; then
+            echo "unsafe code found outside the documented shim: $hits"
+            exit 1
+          fi
+      - name: Every dependency carries a justification
+        run: |
+          deps=$(sed -n '/^\[dependencies\]/,/^\[/p' Cargo.toml | grep -E '^[a-z0-9_-]+ *=' | cut -d= -f1 | tr -d ' ')
+          for d in $deps; do
+            if ! grep -B3 "^$d *=" Cargo.toml | grep -q '^#'; then
+              echo "dependency $d has no justification comment in Cargo.toml"
+              exit 1
+            fi
+          done
+          echo "dependency count: $(echo "$deps" | wc -l) (goal: 0)"
+      - name: Release build
+        run: cargo build --release --locked
+      - name: No em dashes in the built binary
+        run: |
+          if grep -a -q -P '\x{2014}' target/release/phoenix; then
+            echo "em dash reached a runtime string in the binary"
+            exit 1
+          fi
+      - name: No credential shapes in the built binary
+        run: |
+          if grep -a -o -P 'sk-[A-Za-z0-9]{20}|ghp_[A-Za-z0-9]{36}|xoxb-[0-9A-Za-z-]{10,}|AKIA[0-9A-Z]{16}' target/release/phoenix; then
+            echo "credential-shaped string found in the binary"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phoenix-linux-x86_64-gnu
+          path: target/release/phoenix
+
+  cross:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, x86_64-pc-windows-gnu
+      - name: Cross toolchains
+        run: sudo apt-get update && sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu libc6-dev-arm64-cross gcc-mingw-w64-x86-64
+      - name: Linux x86_64 musl
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Linux arm64 musl
+        run: CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc cargo build --release --locked --target aarch64-unknown-linux-musl
+      - name: Windows x86_64 gnu
+        run: cargo build --release --locked --target x86_64-pc-windows-gnu
+
+  cross-macos:
+    runs-on: macos-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: macOS arm64
+        run: cargo build --release --locked --target aarch64-apple-darwin
+      - name: macOS x86_64
+        run: cargo build --release --locked --target x86_64-apple-darwin
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: musl toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Run the E2E harness in Docker
+        run: cargo run --release --locked --bin phoenix-e2e -- host

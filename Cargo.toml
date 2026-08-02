@@ -1,0 +1,53 @@
+[package]
+name = "openphoenix"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Personal AI agent runtime. Single static binary, small dependency tree."
+
+[[bin]]
+name = "phoenix"
+path = "src/main.rs"
+
+[[bin]]
+name = "phoenix-e2e"
+path = "src/bin/e2e/main.rs"
+
+# Dependency policy: keep this tree minimal. Every new crate needs a strong
+# justification in a comment here and in CONTRIBUTING.md.
+[dependencies]
+# Blocking HTTP client with rustls. No tokio, no openssl.
+ureq = { version = "2", default-features = false, features = ["tls"] }
+# Direct rustls handle for the hand-rolled WebSocket client (same tree ureq uses).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "0.26"
+# Data model for provider payloads and tool schemas.
+serde = "1"
+serde_json = "1"
+# Config file format.
+toml = "0.8"
+# Already compiled in under rustls; used directly for the encrypted secret store.
+ring = "0.17"
+# libc: only for the daemon.rs signal shim (SIGTERM/SIGHUP/SIGINT for
+# graceful shutdown and two-stage ctrl-c). Everything else uses std or
+# subprocess calls. Goes away if std ever grows a signal API.
+libc = "0.2"
+
+[profile.dev.package.ring]
+opt-level = 3
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+overflow-checks = true
+
+[lints.rust]
+unused_must_use = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
