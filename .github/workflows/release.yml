@@ -159,7 +159,7 @@ jobs:
             'ENTRYPOINT ["/phoenix"]' \
             'CMD ["serve"]' > docker/Dockerfile
       - name: Build and push multi-arch image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
