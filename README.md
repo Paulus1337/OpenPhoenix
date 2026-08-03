@@ -7,7 +7,7 @@
 <p align="center"><a href="https://openphoenix.app">openphoenix.app</a> · <a href="https://github.com/Paulus1337/OpenPhoenix/wiki">wiki</a> · <a href="https://github.com/Paulus1337/OpenPhoenix/releases">releases</a></p>
 
 <p align="center">
-<a href="https://github.com/Paulus1337/OpenPhoenix/actions/workflows/ci.yml"><img src="https://github.com/Paulus1337/OpenPhoenix/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/Paulus1337/OpenPhoenix/actions/workflows/build.yml"><img src="https://github.com/Paulus1337/OpenPhoenix/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="https://github.com/Paulus1337/OpenPhoenix/releases"><img src="https://img.shields.io/github/v/release/Paulus1337/OpenPhoenix" alt="Release"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange" alt="MIT"></a>
 <img src="https://img.shields.io/badge/deps-0_goal-orange" alt="0 crates goal">
