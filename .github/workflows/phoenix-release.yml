@@ -1,0 +1,228 @@
+name: Release
+on:
+  push:
+    tags: ["v[0-9]*.[0-9]*.[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing semantic version tag to publish
+        required: true
+        type: string
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+concurrency:
+  group: publish-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the tagged source
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Confirm the tag matches the crate version
+        run: |
+          version="${RELEASE_TAG#v}"
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$version"
+      - name: Install Rust from rust-toolchain.toml
+        run: |
+          rustup update stable --no-self-update
+          rustup show active-toolchain
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --all-targets --locked -- --test-threads=1
+      - name: Record the release toolchain
+        run: |
+          release_rustc="$(rustc --version)"
+          echo "RELEASE_RUSTC=$release_rustc" >> "$GITHUB_ENV"
+          {
+            echo "### Release toolchain"
+            echo ""
+            echo "- tag: ${RELEASE_TAG}"
+            echo "- ${release_rustc}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save the release toolchain
+        run: printf '%s\n' "$RELEASE_RUSTC" > release-rustc.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-toolchain
+          path: release-rustc.txt
+          if-no-files-found: error
+          retention-days: 7
+  build:
+    name: Build ${{ matrix.asset }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset: phoenix-linux-x86_64
+            setup: sudo apt-get update && sudo apt-get install -y musl-tools
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            asset: phoenix-linux-arm64
+            setup: sudo apt-get update && sudo apt-get install -y musl-tools
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            asset: phoenix-macos-arm64
+            setup: "true"
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            asset: phoenix-macos-x86_64
+            setup: "true"
+          - runner: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            asset: phoenix-windows-x86_64.exe
+            setup: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out the tagged source
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Prepare the toolchain and target
+        run: |
+          ${{ matrix.setup }}
+          rustup update stable --no-self-update
+          rustup target add "${{ matrix.target }}"
+      - name: Build
+        run: cargo build --release --locked --bin phoenix --target "${{ matrix.target }}"
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      - name: Confirm the native binary version
+        if: matrix.target != 'x86_64-pc-windows-gnu'
+        run: |
+          version="${RELEASE_TAG#v}"
+          output="$(target/${{ matrix.target }}/release/phoenix --version)"
+          [[ "$output" == *"$version"* ]]
+      - name: Stage the artifact
+        run: |
+          mkdir -p dist
+          source="target/${{ matrix.target }}/release/phoenix"
+          if [[ "${{ matrix.asset }}" == *.exe ]]; then source="${source}.exe"; fi
+          cp "$source" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+  package:
+    name: Package Debian ${{ matrix.arch }}
+    needs: [verify, build]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            asset: phoenix-linux-x86_64
+          - arch: arm64
+            asset: phoenix-linux-arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the tagged source
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ matrix.asset }}
+          path: input
+      - name: Build the Debian package
+        run: |
+          version="${RELEASE_TAG#v}"
+          mkdir -p package/usr/bin package/DEBIAN dist
+          install -m 0755 "input/${{ matrix.asset }}" package/usr/bin/phoenix
+          printf 'Package: openphoenix\nVersion: %s\nArchitecture: %s\nMaintainer: Paulus1337 <Paulus1337@users.noreply.github.com>\nSection: utils\nPriority: optional\nHomepage: https://github.com/Paulus1337/OpenPhoenix\nDescription: Personal AI agent runtime\n A single static binary that connects model providers, chat clients,\n guarded local tools, memory, and scheduled work through one runtime.\n' "$version" "${{ matrix.arch }}" > package/DEBIAN/control
+          dpkg-deb --root-owner-group --build package "dist/openphoenix_${version}_${{ matrix.arch }}.deb"
+          dpkg-deb --info "dist/openphoenix_${version}_${{ matrix.arch }}.deb"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: openphoenix-deb-${{ matrix.arch }}
+          path: dist/*.deb
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    name: Publish release and container
+    needs: [verify, build, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Check out the tagged source
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Read release toolchain
+        run: |
+          release_rustc="$(cat dist/release-rustc.txt)"
+          rm dist/release-rustc.txt
+          echo "RELEASE_RUSTC=$release_rustc" >> "$GITHUB_ENV"
+      - name: Create checksums
+        run: |
+          cd dist
+          for asset in *; do
+            if [[ "$asset" != SHA256SUMS ]]; then sha256sum "$asset"; fi
+          done > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Stage the container context
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          install -m 0755 dist/phoenix-linux-x86_64 dist/amd64/phoenix
+          install -m 0755 dist/phoenix-linux-arm64 dist/arm64/phoenix
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
+        with:
+          context: .
+          target: publish
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ghcr.io/paulus1337/openphoenix:${{ env.RELEASE_TAG }}
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=()
+          for asset in dist/*; do
+            if [[ -f "$asset" ]]; then assets+=("$asset"); fi
+          done
+          gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --notes "Built with ${RELEASE_RUSTC}." --title "OpenPhoenix $RELEASE_TAG"

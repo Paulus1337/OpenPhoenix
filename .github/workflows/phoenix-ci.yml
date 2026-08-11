@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+jobs:
+  checks:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source without credentials
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Install Rust from rust-toolchain.toml
+        run: |
+          rustup update stable --no-self-update
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --all-targets --locked -- --test-threads=1
+      - name: Build release binaries
+        run: cargo build --release --locked --bins
+      - name: Record toolchain
+        run: |
+          {
+            echo "### Toolchain"
+            echo ""
+            echo "- $(rustc --version)"
+            echo "- $(cargo --version)"
+          } >> "$GITHUB_STEP_SUMMARY"

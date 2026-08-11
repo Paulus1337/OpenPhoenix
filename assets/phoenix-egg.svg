@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Pip hatching - OpenPhoenix</title>
+  <defs>
+    <radialGradient id="shell" cx="50%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ffe6b3"/>
+      <stop offset="60%" stop-color="#ffcf8a"/>
+      <stop offset="100%" stop-color="#f2a35a"/>
+    </radialGradient>
+    <linearGradient id="eggflame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ff7a1a"/>
+      <stop offset="60%" stop-color="#ffb02e"/>
+      <stop offset="100%" stop-color="#ffd968"/>
+    </linearGradient>
+  </defs>
+
+  <!-- little flame peeking from the crack -->
+  <path d="M128 34 C118 52 112 60 118 74 C122 82 134 82 138 74 C144 60 138 52 128 34 Z"
+        fill="url(#eggflame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M104 52 C100 62 97 68 101 76 C105 82 114 81 116 74 C118 65 112 60 104 52 Z"
+        fill="url(#eggflame)" stroke="#c2410c" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- egg -->
+  <path d="M128 66 C170 66 196 108 196 152 C196 196 166 224 128 224 C90 224 60 196 60 152 C60 108 86 66 128 66 Z"
+        fill="url(#shell)" stroke="#c2410c" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- zig-zag crack where the flame escapes -->
+  <path d="M104 78 L114 88 L106 96 L118 104 L112 112"
+        fill="none" stroke="#c2410c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- eyes peeking through the shell -->
+  <circle cx="106" cy="140" r="16" fill="#ffffff" stroke="#c2410c" stroke-width="4"/>
+  <circle cx="150" cy="140" r="16" fill="#ffffff" stroke="#c2410c" stroke-width="4"/>
+  <circle cx="109" cy="143" r="7" fill="#3b2314"/>
+  <circle cx="147" cy="143" r="7" fill="#3b2314"/>
+  <circle cx="111" cy="140" r="2.6" fill="#ffffff"/>
+  <circle cx="149" cy="140" r="2.6" fill="#ffffff"/>
+
+  <!-- cheeks -->
+  <ellipse cx="88" cy="160" rx="8" ry="5" fill="#ff7a52" opacity="0.75"/>
+  <ellipse cx="168" cy="160" rx="8" ry="5" fill="#ff7a52" opacity="0.75"/>
+
+  <!-- tiny beak through the shell -->
+  <path d="M120 158 L136 158 C136 166 132 171 128 171 C124 171 120 166 120 158 Z"
+        fill="#ffcf3f" stroke="#c2410c" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- shell speckles -->
+  <circle cx="86" cy="120" r="4" fill="#e8934f" opacity="0.6"/>
+  <circle cx="176" cy="116" r="4" fill="#e8934f" opacity="0.6"/>
+  <circle cx="96" cy="196" r="4" fill="#e8934f" opacity="0.6"/>
+  <circle cx="164" cy="198" r="4" fill="#e8934f" opacity="0.6"/>
+</svg>

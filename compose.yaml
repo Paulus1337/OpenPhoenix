@@ -1,0 +1,27 @@
+services:
+  phoenix:
+    build:
+      context: .
+      target: source
+    image: ghcr.io/paulus1337/openphoenix:v0.0.1
+    command: ["serve"]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      PHOENIX_HOME: /data
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - phoenix-state:/data
+      - phoenix-workspace:/workspace
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+volumes:
+  phoenix-state:
+  phoenix-workspace:
